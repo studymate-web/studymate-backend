@@ -1,0 +1,4 @@
+# No subir secretos
+.env
+studymate-backend/target/
+
