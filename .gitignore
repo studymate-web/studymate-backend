@@ -1,4 +1,5 @@
 # No subir secretos
-.env
-studymate-backend/target/
+.idea/
+.vscode/
+**/target/
 

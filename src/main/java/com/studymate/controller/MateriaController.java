@@ -1,18 +1,21 @@
 package com.studymate.controller;
 
+import com.studymate.dto.MateriaDTO;
 import com.studymate.model.Materia;
+import com.studymate.model.Usuario;
+import com.studymate.service.JwtService;
 import com.studymate.service.MateriaService;
+import com.studymate.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/materias")
@@ -21,60 +24,42 @@ import java.util.concurrent.atomic.AtomicLong;
 public class MateriaController {
 
     private final MateriaService materiaService;
-    
-    // Almacenamiento temporal en memoria
-    private static final Map<Long, Map<String, Object>> materiasEnMemoria = new ConcurrentHashMap<>();
-    private static final AtomicLong idCounter = new AtomicLong(1);
+    private final UsuarioService usuarioService;
+    private final JwtService jwtService;
 
-    /**
-     * Obtener todas las materias del usuario
-     */
+    private Long getUsuarioIdDesdeToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new RuntimeException("Token no proporcionado");
+        }
+        String token = authHeader.substring(7);
+        String email = jwtService.extractUsername(token);
+        Usuario usuario = usuarioService.buscarPorEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        return usuario.getId();
+    }
+
     @GetMapping
-    public ResponseEntity<Map<String, Object>> obtenerMaterias() {
+    public ResponseEntity<Map<String, Object>> obtenerMaterias(HttpServletRequest request) {
+        Long usuarioId = getUsuarioIdDesdeToken(request);
+        List<Materia> materias = materiaService.buscarPorUsuario(usuarioId);
         Map<String, Object> response = new HashMap<>();
-        response.put("materias", materiasEnMemoria.values());
+        response.put("materias", materias);
         response.put("message", "Materias obtenidas correctamente");
         response.put("status", "SUCCESS");
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Crear una nueva materia
-     */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> crearMateria(@Valid @RequestBody Map<String, Object> request) {
+    public ResponseEntity<Map<String, Object>> crearMateria(HttpServletRequest request,
+            @Valid @RequestBody MateriaDTO materiaDTO) {
         try {
-            String nombre = (String) request.get("nombre");
-            String descripcion = (String) request.get("descripcion");
-            String profesor = (String) request.get("profesor");
-            String horario = (String) request.get("horario");
-            String color = (String) request.get("color");
-
-            if (nombre == null || nombre.trim().isEmpty()) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "El nombre es obligatorio");
-                return ResponseEntity.badRequest().body(error);
-            }
-
-            // Crear materia en memoria
-            Long id = idCounter.getAndIncrement();
-            Map<String, Object> materia = new HashMap<>();
-            materia.put("id", id);
-            materia.put("nombre", nombre);
-            materia.put("descripcion", descripcion);
-            materia.put("profesor", profesor);
-            materia.put("horario", horario);
-            materia.put("color", color);
-            materia.put("activa", true);
-            materia.put("fechaCreacion", java.time.LocalDateTime.now().toString());
-
-            materiasEnMemoria.put(id, materia);
-            
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            Materia materia = materiaService.crearMateria(materiaDTO, usuarioId);
             Map<String, Object> response = new HashMap<>();
             response.put("materia", materia);
             response.put("message", "Materia creada exitosamente");
             response.put("status", "SUCCESS");
-            
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -84,122 +69,53 @@ public class MateriaController {
         }
     }
 
-    /**
-     * Obtener una materia específica por ID
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> obtenerMateria(@PathVariable Long id) {
+    public ResponseEntity<?> obtenerMateria(HttpServletRequest request, @PathVariable Long id) {
         try {
-            if (!materiasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Materia no encontrada");
-                return ResponseEntity.notFound().build();
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            Materia materia = materiaService.buscarPorId(id).orElse(null);
+            if (materia == null || !materia.getUsuario().getId().equals(usuarioId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Materia no encontrada"));
             }
-
-            Map<String, Object> materia = materiasEnMemoria.get(id);
             return ResponseEntity.ok(materia);
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al obtener materia: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al obtener materia: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 
-    /**
-     * Actualizar una materia existente
-     */
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> actualizarMateria(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> actualizarMateria(HttpServletRequest request, @PathVariable Long id,
+            @Valid @RequestBody MateriaDTO materiaDTO) {
         try {
-            if (!materiasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Materia no encontrada");
-                return ResponseEntity.notFound().build();
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            Materia existente = materiaService.buscarPorId(id).orElse(null);
+            if (existente == null || !existente.getUsuario().getId().equals(usuarioId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Materia no encontrada"));
             }
-
-            String nombre = (String) request.get("nombre");
-            String descripcion = (String) request.get("descripcion");
-            String profesor = (String) request.get("profesor");
-            String horario = (String) request.get("horario");
-            String color = (String) request.get("color");
-
-            Map<String, Object> materia = materiasEnMemoria.get(id);
-            materia.put("nombre", nombre);
-            materia.put("descripcion", descripcion);
-            materia.put("profesor", profesor);
-            materia.put("horario", horario);
-            materia.put("color", color);
-            materia.put("fechaActualizacion", java.time.LocalDateTime.now().toString());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("materia", materia);
-            response.put("message", "Materia actualizada exitosamente");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
+            materiaDTO.setId(id);
+            Materia actualizada = materiaService.actualizarMateria(materiaDTO);
+            return ResponseEntity.ok(actualizada);
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al actualizar materia: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al actualizar materia: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 
-    /**
-     * Desactivar una materia
-     */
-    @PatchMapping("/{id}/desactivar")
-    public ResponseEntity<Map<String, Object>> desactivarMateria(@PathVariable Long id) {
-        try {
-            if (!materiasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Materia no encontrada");
-                return ResponseEntity.notFound().build();
-            }
-
-            Map<String, Object> materia = materiasEnMemoria.get(id);
-            materia.put("activa", false);
-            materia.put("fechaDesactivacion", java.time.LocalDateTime.now().toString());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("materia", materia);
-            response.put("message", "Materia desactivada exitosamente");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al desactivar materia: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
-        }
-    }
-
-    /**
-     * Eliminar una materia
-     */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> eliminarMateria(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarMateria(HttpServletRequest request, @PathVariable Long id) {
         try {
-            if (!materiasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Materia no encontrada");
-                return ResponseEntity.notFound().build();
-            }
-
-            materiasEnMemoria.remove(id);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Materia eliminada exitosamente");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            materiaService.eliminarMateria(id, usuarioId);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Materia eliminada exitosamente",
+                    "status", "SUCCESS"));
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al eliminar materia: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al eliminar materia: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 }

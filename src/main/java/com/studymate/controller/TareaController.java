@@ -1,18 +1,22 @@
 package com.studymate.controller;
 
+import com.studymate.model.Materia;
 import com.studymate.model.Tarea;
+import com.studymate.model.Usuario;
+import com.studymate.service.JwtService;
+import com.studymate.service.MateriaService;
 import com.studymate.service.TareaService;
+import com.studymate.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/tareas")
@@ -21,19 +25,29 @@ import java.util.concurrent.atomic.AtomicLong;
 public class TareaController {
 
     private final TareaService tareaService;
-    
-    // Almacenamiento temporal en memoria
-    private static final Map<Long, Map<String, Object>> tareasEnMemoria = new ConcurrentHashMap<>();
-    private static final AtomicLong idCounter = new AtomicLong(1);
+    private final UsuarioService usuarioService;
+    private final MateriaService materiaService;
+    private final JwtService jwtService;
 
-    /**
-     * Obtener todas las tareas del usuario
-     */
+    private Long getUsuarioIdDesdeToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new RuntimeException("Token no proporcionado");
+        }
+        String token = authHeader.substring(7);
+        String email = jwtService.extractUsername(token);
+        Usuario usuario = usuarioService.buscarPorEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        return usuario.getId();
+    }
+
     @GetMapping
-    public ResponseEntity<Map<String, Object>> obtenerTareas() {
+    public ResponseEntity<Map<String, Object>> obtenerTareas(HttpServletRequest request) {
         try {
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            List<Tarea> tareas = tareaService.buscarPorUsuario(usuarioId);
             Map<String, Object> response = new HashMap<>();
-            response.put("tareas", new java.util.ArrayList<>(tareasEnMemoria.values()));
+            response.put("tareas", tareas);
             response.put("message", "Tareas obtenidas correctamente");
             response.put("status", "SUCCESS");
             return ResponseEntity.ok(response);
@@ -45,43 +59,24 @@ public class TareaController {
         }
     }
 
-    /**
-     * Crear una nueva tarea
-     */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> crearTarea(@Valid @RequestBody Map<String, Object> request) {
+    public ResponseEntity<Map<String, Object>> crearTarea(HttpServletRequest request, @Valid @RequestBody Tarea tarea) {
         try {
-            String titulo = (String) request.get("titulo");
-            String descripcion = (String) request.get("descripcion");
-            String materia = (String) request.get("materia");
-            String fechaVencimiento = (String) request.get("fechaVencimiento");
-            String prioridad = (String) request.get("prioridad");
-
-            if (titulo == null || titulo.trim().isEmpty()) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "El título es obligatorio");
-                return ResponseEntity.badRequest().body(error);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            // Si viene materia con id, validar pertenencia
+            if (tarea.getMateria() != null && tarea.getMateria().getId() != null) {
+                Materia materia = materiaService.buscarPorId(tarea.getMateria().getId())
+                        .orElseThrow(() -> new RuntimeException("Materia no encontrada"));
+                if (!materia.getUsuario().getId().equals(usuarioId)) {
+                    throw new RuntimeException("La materia no pertenece al usuario");
+                }
+                tarea.setMateria(materia);
             }
-
-            // Crear tarea en memoria
-            Long id = idCounter.getAndIncrement();
-            Map<String, Object> tarea = new HashMap<>();
-            tarea.put("id", id);
-            tarea.put("titulo", titulo);
-            tarea.put("descripcion", descripcion);
-            tarea.put("materia", materia);
-            tarea.put("fechaVencimiento", fechaVencimiento);
-            tarea.put("prioridad", prioridad);
-            tarea.put("completada", false);
-            tarea.put("fechaCreacion", java.time.LocalDateTime.now().toString());
-
-            tareasEnMemoria.put(id, tarea);
-
+            Tarea creada = tareaService.crearTarea(tarea, usuarioId);
             Map<String, Object> response = new HashMap<>();
-            response.put("tarea", tarea);
+            response.put("tarea", creada);
             response.put("message", "Tarea creada exitosamente");
             response.put("status", "SUCCESS");
-            
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -91,122 +86,66 @@ public class TareaController {
         }
     }
 
-    /**
-     * Obtener una tarea específica por ID
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> obtenerTarea(@PathVariable Long id) {
+    public ResponseEntity<?> obtenerTarea(HttpServletRequest request, @PathVariable Long id) {
         try {
-            if (!tareasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Tarea no encontrada");
-                return ResponseEntity.notFound().build();
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            Tarea tarea = tareaService.buscarPorId(id).orElse(null);
+            if (tarea == null || !tarea.getUsuario().getId().equals(usuarioId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Tarea no encontrada"));
             }
-
-            Map<String, Object> tarea = tareasEnMemoria.get(id);
             return ResponseEntity.ok(tarea);
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al obtener tarea: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al obtener tarea: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 
-    /**
-     * Actualizar una tarea existente
-     */
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> actualizarTarea(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> actualizarTarea(HttpServletRequest request, @PathVariable Long id,
+            @Valid @RequestBody Tarea tarea) {
         try {
-            if (!tareasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Tarea no encontrada");
-                return ResponseEntity.notFound().build();
-            }
-
-            String titulo = (String) request.get("titulo");
-            String descripcion = (String) request.get("descripcion");
-            String materia = (String) request.get("materia");
-            String fechaVencimiento = (String) request.get("fechaVencimiento");
-            String prioridad = (String) request.get("prioridad");
-
-            Map<String, Object> tarea = tareasEnMemoria.get(id);
-            tarea.put("titulo", titulo);
-            tarea.put("descripcion", descripcion);
-            tarea.put("materia", materia);
-            tarea.put("fechaVencimiento", fechaVencimiento);
-            tarea.put("prioridad", prioridad);
-            tarea.put("fechaActualizacion", java.time.LocalDateTime.now().toString());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("tarea", tarea);
-            response.put("message", "Tarea actualizada exitosamente");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            if (tarea.getId() == null)
+                tarea.setId(id);
+            Tarea actualizada = tareaService.actualizarTarea(tarea, usuarioId);
+            return ResponseEntity.ok(actualizada);
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al actualizar tarea: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al actualizar tarea: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 
-    /**
-     * Marcar tarea como completada
-     */
     @PatchMapping("/{id}/completar")
-    public ResponseEntity<Map<String, Object>> completarTarea(@PathVariable Long id) {
+    public ResponseEntity<?> completarTarea(HttpServletRequest request, @PathVariable Long id) {
         try {
-            if (!tareasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Tarea no encontrada");
-                return ResponseEntity.notFound().build();
-            }
-
-            Map<String, Object> tarea = tareasEnMemoria.get(id);
-            tarea.put("completada", true);
-            tarea.put("fechaCompletada", java.time.LocalDateTime.now().toString());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("tarea", tarea);
-            response.put("message", "Tarea marcada como completada");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            Tarea tarea = tareaService.marcarCompletada(id, usuarioId);
+            return ResponseEntity.ok(Map.of(
+                    "tarea", tarea,
+                    "message", "Tarea marcada como completada",
+                    "status", "SUCCESS"));
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al completar tarea: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al completar tarea: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 
-    /**
-     * Eliminar una tarea
-     */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> eliminarTarea(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarTarea(HttpServletRequest request, @PathVariable Long id) {
         try {
-            if (!tareasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Tarea no encontrada");
-                return ResponseEntity.notFound().build();
-            }
-
-            tareasEnMemoria.remove(id);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Tarea eliminada exitosamente");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            tareaService.eliminarTarea(id, usuarioId);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Tarea eliminada exitosamente",
+                    "status", "SUCCESS"));
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al eliminar tarea: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al eliminar tarea: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 }

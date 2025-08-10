@@ -22,8 +22,9 @@ public class MateriaService {
 
     /**
      * Crea una nueva materia para un usuario
+     * 
      * @param materiaDTO Datos de la materia
-     * @param usuarioId ID del usuario propietario
+     * @param usuarioId  ID del usuario propietario
      * @return Materia creada
      */
     public Materia crearMateria(MateriaDTO materiaDTO, Long usuarioId) {
@@ -43,6 +44,7 @@ public class MateriaService {
 
     /**
      * Busca una materia por su ID
+     * 
      * @param id ID de la materia
      * @return Optional con la materia si existe
      */
@@ -52,6 +54,7 @@ public class MateriaService {
 
     /**
      * Busca todas las materias de un usuario
+     * 
      * @param usuarioId ID del usuario
      * @return Lista de materias del usuario
      */
@@ -61,21 +64,28 @@ public class MateriaService {
 
     /**
      * Actualiza una materia existente
+     * 
      * @param materiaDTO Datos actualizados de la materia
      * @return Materia actualizada
      */
     public Materia actualizarMateria(MateriaDTO materiaDTO) {
-        if (!materiaRepository.existsById(materiaDTO.getId())) {
-            throw new RuntimeException("Materia no encontrada");
-        }
-        
-        Materia materia = convertirDTOaEntidad(materiaDTO);
-        return materiaRepository.save(materia);
+        Materia existente = materiaRepository.findById(materiaDTO.getId())
+                .orElseThrow(() -> new RuntimeException("Materia no encontrada"));
+
+        // Actualizar solo campos editables, preservar el usuario y demás relaciones
+        existente.setNombre(materiaDTO.getNombre());
+        existente.setCodigo(materiaDTO.getCodigo());
+        existente.setDescripcion(materiaDTO.getDescripcion());
+        existente.setCreditos(materiaDTO.getCreditos());
+        existente.setColor(materiaDTO.getColor());
+
+        return materiaRepository.save(existente);
     }
 
     /**
      * Elimina una materia
-     * @param id ID de la materia a eliminar
+     * 
+     * @param id        ID de la materia a eliminar
      * @param usuarioId ID del usuario propietario
      */
     public void eliminarMateria(Long id, Long usuarioId) {
@@ -92,6 +102,7 @@ public class MateriaService {
 
     /**
      * Convierte un DTO a entidad Materia
+     * 
      * @param dto DTO con los datos de la materia
      * @return Entidad Materia
      */

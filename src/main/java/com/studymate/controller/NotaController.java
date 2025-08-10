@@ -1,18 +1,22 @@
 package com.studymate.controller;
 
+import com.studymate.model.Materia;
 import com.studymate.model.Nota;
+import com.studymate.model.Usuario;
+import com.studymate.service.JwtService;
+import com.studymate.service.MateriaService;
 import com.studymate.service.NotaService;
+import com.studymate.service.UsuarioService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 @RestController
 @RequestMapping("/notas")
@@ -21,19 +25,29 @@ import java.util.concurrent.atomic.AtomicLong;
 public class NotaController {
 
     private final NotaService notaService;
-    
-    // Almacenamiento temporal en memoria
-    private static final Map<Long, Map<String, Object>> notasEnMemoria = new ConcurrentHashMap<>();
-    private static final AtomicLong idCounter = new AtomicLong(1);
+    private final UsuarioService usuarioService;
+    private final MateriaService materiaService;
+    private final JwtService jwtService;
 
-    /**
-     * Obtener todas las notas del usuario
-     */
+    private Long getUsuarioIdDesdeToken(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            throw new RuntimeException("Token no proporcionado");
+        }
+        String token = authHeader.substring(7);
+        String email = jwtService.extractUsername(token);
+        Usuario usuario = usuarioService.buscarPorEmail(email)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+        return usuario.getId();
+    }
+
     @GetMapping
-    public ResponseEntity<Map<String, Object>> obtenerNotas() {
+    public ResponseEntity<Map<String, Object>> obtenerNotas(HttpServletRequest request) {
         try {
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            List<Nota> notas = notaService.buscarPorUsuario(usuarioId);
             Map<String, Object> response = new HashMap<>();
-            response.put("notas", new java.util.ArrayList<>(notasEnMemoria.values()));
+            response.put("notas", notas);
             response.put("message", "Notas obtenidas correctamente");
             response.put("status", "SUCCESS");
             return ResponseEntity.ok(response);
@@ -45,38 +59,23 @@ public class NotaController {
         }
     }
 
-    /**
-     * Crear una nueva nota
-     */
     @PostMapping
-    public ResponseEntity<Map<String, Object>> crearNota(@Valid @RequestBody Map<String, Object> request) {
+    public ResponseEntity<Map<String, Object>> crearNota(HttpServletRequest request, @Valid @RequestBody Nota nota) {
         try {
-            String titulo = (String) request.get("titulo");
-            String contenido = (String) request.get("contenido");
-            String materia = (String) request.get("materia");
-
-            if (titulo == null || titulo.trim().isEmpty()) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "El título es obligatorio");
-                return ResponseEntity.badRequest().body(error);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            if (nota.getMateria() != null && nota.getMateria().getId() != null) {
+                Materia materia = materiaService.buscarPorId(nota.getMateria().getId())
+                        .orElseThrow(() -> new RuntimeException("Materia no encontrada"));
+                if (!materia.getUsuario().getId().equals(usuarioId)) {
+                    throw new RuntimeException("La materia no pertenece al usuario");
+                }
+                nota.setMateria(materia);
             }
-
-            // Crear nota en memoria
-            Long id = idCounter.getAndIncrement();
-            Map<String, Object> nota = new HashMap<>();
-            nota.put("id", id);
-            nota.put("titulo", titulo);
-            nota.put("contenido", contenido);
-            nota.put("materia", materia);
-            nota.put("fechaCreacion", java.time.LocalDateTime.now().toString());
-
-            notasEnMemoria.put(id, nota);
-
+            Nota creada = notaService.crearNota(nota, usuarioId);
             Map<String, Object> response = new HashMap<>();
-            response.put("nota", nota);
+            response.put("nota", creada);
             response.put("message", "Nota creada exitosamente");
             response.put("status", "SUCCESS");
-            
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -86,88 +85,50 @@ public class NotaController {
         }
     }
 
-    /**
-     * Obtener una nota específica por ID
-     */
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> obtenerNota(@PathVariable Long id) {
+    public ResponseEntity<?> obtenerNota(HttpServletRequest request, @PathVariable Long id) {
         try {
-            if (!notasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Nota no encontrada");
-                return ResponseEntity.notFound().build();
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            Nota nota = notaService.buscarPorId(id).orElse(null);
+            if (nota == null || !nota.getUsuario().getId().equals(usuarioId)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("error", "Nota no encontrada"));
             }
-
-            Map<String, Object> nota = notasEnMemoria.get(id);
             return ResponseEntity.ok(nota);
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al obtener nota: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al obtener nota: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 
-    /**
-     * Actualizar una nota existente
-     */
     @PutMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> actualizarNota(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+    public ResponseEntity<?> actualizarNota(HttpServletRequest request, @PathVariable Long id,
+            @Valid @RequestBody Nota nota) {
         try {
-            if (!notasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Nota no encontrada");
-                return ResponseEntity.notFound().build();
-            }
-
-            String titulo = (String) request.get("titulo");
-            String contenido = (String) request.get("contenido");
-            String materia = (String) request.get("materia");
-
-            Map<String, Object> nota = notasEnMemoria.get(id);
-            nota.put("titulo", titulo);
-            nota.put("contenido", contenido);
-            nota.put("materia", materia);
-            nota.put("fechaActualizacion", java.time.LocalDateTime.now().toString());
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("nota", nota);
-            response.put("message", "Nota actualizada exitosamente");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            if (nota.getId() == null)
+                nota.setId(id);
+            Nota actualizada = notaService.actualizarNota(nota, usuarioId);
+            return ResponseEntity.ok(actualizada);
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al actualizar nota: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al actualizar nota: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 
-    /**
-     * Eliminar una nota
-     */
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> eliminarNota(@PathVariable Long id) {
+    public ResponseEntity<?> eliminarNota(HttpServletRequest request, @PathVariable Long id) {
         try {
-            if (!notasEnMemoria.containsKey(id)) {
-                Map<String, Object> error = new HashMap<>();
-                error.put("error", "Nota no encontrada");
-                return ResponseEntity.notFound().build();
-            }
-
-            notasEnMemoria.remove(id);
-
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Nota eliminada exitosamente");
-            response.put("status", "SUCCESS");
-            
-            return ResponseEntity.ok(response);
+            Long usuarioId = getUsuarioIdDesdeToken(request);
+            notaService.eliminarNota(id, usuarioId);
+            return ResponseEntity.ok(Map.of(
+                    "message", "Nota eliminada exitosamente",
+                    "status", "SUCCESS"));
         } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al eliminar nota: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Error al eliminar nota: " + e.getMessage(),
+                    "status", "ERROR"));
         }
     }
 }
