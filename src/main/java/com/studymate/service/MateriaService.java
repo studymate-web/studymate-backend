@@ -6,6 +6,8 @@ import com.studymate.model.Usuario;
 import com.studymate.repository.MateriaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,15 +32,19 @@ public class MateriaService {
     public Materia crearMateria(MateriaDTO materiaDTO, Long usuarioId) {
         // Verificar que el usuario existe
         Usuario usuario = usuarioService.buscarPorId(usuarioId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
 
         // Verificar que no existe una materia con el mismo nombre
         if (materiaRepository.existsByNombreAndUsuarioId(materiaDTO.getNombre(), usuarioId)) {
-            throw new RuntimeException("Ya existe una materia con ese nombre");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ya existe una materia con ese nombre");
         }
 
         Materia materia = convertirDTOaEntidad(materiaDTO);
         materia.setUsuario(usuario);
+        // Normalizar valores nulos
+        if (materia.getColor() == null || materia.getColor().isBlank()) {
+            materia.setColor("#007bff");
+        }
         return materiaRepository.save(materia);
     }
 
@@ -70,7 +76,7 @@ public class MateriaService {
      */
     public Materia actualizarMateria(MateriaDTO materiaDTO) {
         Materia existente = materiaRepository.findById(materiaDTO.getId())
-                .orElseThrow(() -> new RuntimeException("Materia no encontrada"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Materia no encontrada"));
 
         // Actualizar solo campos editables, preservar el usuario y demás relaciones
         existente.setNombre(materiaDTO.getNombre());
@@ -90,11 +96,11 @@ public class MateriaService {
      */
     public void eliminarMateria(Long id, Long usuarioId) {
         Materia materia = materiaRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Materia no encontrada"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Materia no encontrada"));
 
         // Verificar que la materia pertenece al usuario
         if (!materia.getUsuario().getId().equals(usuarioId)) {
-            throw new RuntimeException("No tienes permisos para eliminar esta materia");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "No tienes permisos para eliminar esta materia");
         }
 
         materiaRepository.delete(materia);

@@ -54,20 +54,13 @@ public class MateriaController {
     @PostMapping
     public ResponseEntity<Map<String, Object>> crearMateria(HttpServletRequest request,
             @Valid @RequestBody MateriaDTO materiaDTO) {
-        try {
-            Long usuarioId = getUsuarioIdDesdeToken(request);
-            Materia materia = materiaService.crearMateria(materiaDTO, usuarioId);
-            Map<String, Object> response = new HashMap<>();
-            response.put("materia", materia);
-            response.put("message", "Materia creada exitosamente");
-            response.put("status", "SUCCESS");
-            return ResponseEntity.status(HttpStatus.CREATED).body(response);
-        } catch (Exception e) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("message", "Error al crear materia: " + e.getMessage());
-            response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
-        }
+        Long usuarioId = getUsuarioIdDesdeToken(request);
+        Materia materia = materiaService.crearMateria(materiaDTO, usuarioId);
+        Map<String, Object> response = new HashMap<>();
+        response.put("materia", materia);
+        response.put("message", "Materia creada exitosamente");
+        response.put("status", "SUCCESS");
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @GetMapping("/{id}")
