@@ -64,6 +64,14 @@ public class TareaController {
     public ResponseEntity<Map<String, Object>> crearTarea(HttpServletRequest request, @Valid @RequestBody Tarea tarea) {
         try {
             Long usuarioId = getUsuarioIdDesdeToken(request);
+
+            // Log para debugging
+            System.out.println("Creando tarea: " + tarea.getTitulo());
+            System.out.println("Usuario ID: " + usuarioId);
+            System.out.println("Materia: " + (tarea.getMateria() != null ? tarea.getMateria().getId() : "null"));
+            System.out.println("Fecha límite: " + tarea.getFechaLimite());
+            System.out.println("Prioridad: " + tarea.getPrioridad());
+
             // Si viene materia con id, validar pertenencia
             if (tarea.getMateria() != null && tarea.getMateria().getId() != null) {
                 Materia materia = materiaService.buscarPorId(tarea.getMateria().getId())
@@ -73,6 +81,7 @@ public class TareaController {
                 }
                 tarea.setMateria(materia);
             }
+
             Tarea creada = tareaService.crearTarea(tarea, usuarioId);
             Map<String, Object> response = new HashMap<>();
             response.put("tarea", creada);
@@ -80,10 +89,12 @@ public class TareaController {
             response.put("status", "SUCCESS");
             return ResponseEntity.status(HttpStatus.CREATED).body(response);
         } catch (Exception e) {
+            e.printStackTrace(); // Log del error completo
             Map<String, Object> response = new HashMap<>();
             response.put("message", "Error al crear tarea: " + e.getMessage());
             response.put("status", "ERROR");
-            return ResponseEntity.badRequest().body(response);
+            response.put("error", e.getClass().getSimpleName());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 

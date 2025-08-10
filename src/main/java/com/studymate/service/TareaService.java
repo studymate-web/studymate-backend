@@ -3,6 +3,7 @@ package com.studymate.service;
 import com.studymate.model.Tarea;
 import com.studymate.model.Usuario;
 import com.studymate.model.Materia;
+import com.studymate.model.Prioridad;
 import com.studymate.repository.TareaRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,17 +25,47 @@ public class TareaService {
 
     /**
      * Crea una nueva tarea para un usuario
-     * @param tarea Datos de la tarea
+     * 
+     * @param tarea     Datos de la tarea
      * @param usuarioId ID del usuario propietario
      * @return Tarea creada
      */
     public Tarea crearTarea(Tarea tarea, Long usuarioId) {
-        configurarTarea(tarea, usuarioId);
-        return tareaRepository.save(tarea);
+        try {
+            System.out.println("=== Creando tarea ===");
+            System.out.println("Título: " + tarea.getTitulo());
+            System.out.println("Descripción: " + tarea.getDescripcion());
+            System.out.println("Fecha límite: " + tarea.getFechaLimite());
+            System.out.println("Prioridad: " + tarea.getPrioridad());
+            System.out.println("Usuario ID: " + usuarioId);
+            System.out.println("Materia: " + (tarea.getMateria() != null ? tarea.getMateria().getId() : "null"));
+
+            configurarTarea(tarea, usuarioId);
+
+            // Validar prioridad
+            if (tarea.getPrioridad() == null) {
+                tarea.setPrioridad(Prioridad.MEDIA);
+            }
+
+            // Validar completada
+            if (tarea.getCompletada() == null) {
+                tarea.setCompletada(false);
+            }
+
+            System.out.println("Tarea configurada correctamente");
+            Tarea saved = tareaRepository.save(tarea);
+            System.out.println("Tarea guardada con ID: " + saved.getId());
+            return saved;
+        } catch (Exception e) {
+            System.err.println("Error al crear tarea: " + e.getMessage());
+            e.printStackTrace();
+            throw e;
+        }
     }
 
     /**
      * Busca una tarea por su ID
+     * 
      * @param id ID de la tarea
      * @return Optional con la tarea si existe
      */
@@ -44,6 +75,7 @@ public class TareaService {
 
     /**
      * Busca todas las tareas de un usuario
+     * 
      * @param usuarioId ID del usuario
      * @return Lista de tareas del usuario
      */
@@ -53,6 +85,7 @@ public class TareaService {
 
     /**
      * Busca tareas de una materia específica
+     * 
      * @param materiaId ID de la materia
      * @param usuarioId ID del usuario
      * @return Lista de tareas de la materia
@@ -63,6 +96,7 @@ public class TareaService {
 
     /**
      * Busca tareas generales (sin materia)
+     * 
      * @param usuarioId ID del usuario
      * @return Lista de tareas generales
      */
@@ -72,6 +106,7 @@ public class TareaService {
 
     /**
      * Busca tareas pendientes
+     * 
      * @param usuarioId ID del usuario
      * @return Lista de tareas pendientes
      */
@@ -81,6 +116,7 @@ public class TareaService {
 
     /**
      * Busca tareas urgentes (próximas a vencer)
+     * 
      * @param usuarioId ID del usuario
      * @return Lista de tareas urgentes
      */
@@ -91,7 +127,8 @@ public class TareaService {
 
     /**
      * Marca una tarea como completada
-     * @param id ID de la tarea
+     * 
+     * @param id        ID de la tarea
      * @param usuarioId ID del usuario propietario
      * @return Tarea actualizada
      */
@@ -103,7 +140,8 @@ public class TareaService {
 
     /**
      * Actualiza una tarea existente
-     * @param tarea Datos actualizados de la tarea
+     * 
+     * @param tarea     Datos actualizados de la tarea
      * @param usuarioId ID del usuario propietario
      * @return Tarea actualizada
      */
@@ -114,7 +152,8 @@ public class TareaService {
 
     /**
      * Elimina una tarea
-     * @param id ID de la tarea a eliminar
+     * 
+     * @param id        ID de la tarea a eliminar
      * @param usuarioId ID del usuario propietario
      */
     public void eliminarTarea(Long id, Long usuarioId) {
@@ -124,7 +163,8 @@ public class TareaService {
 
     /**
      * Configura una tarea con el usuario y materia correspondientes
-     * @param tarea Tarea a configurar
+     * 
+     * @param tarea     Tarea a configurar
      * @param usuarioId ID del usuario propietario
      */
     private void configurarTarea(Tarea tarea, Long usuarioId) {
@@ -147,7 +187,8 @@ public class TareaService {
 
     /**
      * Verifica que una tarea pertenece al usuario y la retorna
-     * @param tareaId ID de la tarea
+     * 
+     * @param tareaId   ID de la tarea
      * @param usuarioId ID del usuario
      * @return Tarea si pertenece al usuario
      * @throws RuntimeException si no tiene permisos
