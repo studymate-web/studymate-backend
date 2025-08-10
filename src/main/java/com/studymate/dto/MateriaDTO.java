@@ -18,5 +18,8 @@ public class MateriaDTO {
     private String descripcion;
     private Integer creditos;
     private String color = "#007bff";
+    private String profesor;
+    private String horario;
+    private Boolean activa = true; // Por defecto activa
     private Long usuarioId;
 }

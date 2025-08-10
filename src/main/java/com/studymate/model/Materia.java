@@ -42,6 +42,15 @@ public class Materia {
     @Column(name = "color", length = 7)
     private String color = "#007bff"; // Color por defecto azul
 
+    @Column(name = "profesor", length = 100)
+    private String profesor;
+
+    @Column(name = "horario", length = 200)
+    private String horario;
+
+    @Column(name = "activa")
+    private Boolean activa = true; // Por defecto activa
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "usuario_id", nullable = false)
     @JsonIgnore

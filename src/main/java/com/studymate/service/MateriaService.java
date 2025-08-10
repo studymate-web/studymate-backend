@@ -84,6 +84,9 @@ public class MateriaService {
         existente.setDescripcion(materiaDTO.getDescripcion());
         existente.setCreditos(materiaDTO.getCreditos());
         existente.setColor(materiaDTO.getColor());
+        existente.setProfesor(materiaDTO.getProfesor());
+        existente.setHorario(materiaDTO.getHorario());
+        existente.setActiva(materiaDTO.getActiva() != null ? materiaDTO.getActiva() : true);
 
         return materiaRepository.save(existente);
     }
@@ -120,6 +123,9 @@ public class MateriaService {
         materia.setDescripcion(dto.getDescripcion());
         materia.setCreditos(dto.getCreditos());
         materia.setColor(dto.getColor());
+        materia.setProfesor(dto.getProfesor());
+        materia.setHorario(dto.getHorario());
+        materia.setActiva(dto.getActiva() != null ? dto.getActiva() : true);
         return materia;
     }
 }
