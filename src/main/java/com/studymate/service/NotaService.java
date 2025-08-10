@@ -23,7 +23,8 @@ public class NotaService {
 
     /**
      * Crea una nueva nota para un usuario
-     * @param nota Datos de la nota
+     * 
+     * @param nota      Datos de la nota
      * @param usuarioId ID del usuario propietario
      * @return Nota creada
      */
@@ -34,6 +35,7 @@ public class NotaService {
 
     /**
      * Busca una nota por su ID
+     * 
      * @param id ID de la nota
      * @return Optional con la nota si existe
      */
@@ -43,6 +45,7 @@ public class NotaService {
 
     /**
      * Busca todas las notas de un usuario
+     * 
      * @param usuarioId ID del usuario
      * @return Lista de notas del usuario
      */
@@ -52,6 +55,7 @@ public class NotaService {
 
     /**
      * Busca notas de una materia específica
+     * 
      * @param materiaId ID de la materia
      * @param usuarioId ID del usuario
      * @return Lista de notas de la materia
@@ -62,6 +66,7 @@ public class NotaService {
 
     /**
      * Busca notas generales (sin materia)
+     * 
      * @param usuarioId ID del usuario
      * @return Lista de notas generales
      */
@@ -71,8 +76,9 @@ public class NotaService {
 
     /**
      * Busca notas por título
+     * 
      * @param usuarioId ID del usuario
-     * @param titulo Título a buscar
+     * @param titulo    Título a buscar
      * @return Lista de notas que coinciden
      */
     public List<Nota> buscarPorTitulo(Long usuarioId, String titulo) {
@@ -81,11 +87,13 @@ public class NotaService {
 
     /**
      * Actualiza una nota existente
-     * @param nota Datos actualizados de la nota
+     * 
+     * @param nota      Datos actualizados de la nota
      * @param usuarioId ID del usuario propietario
      * @return Nota actualizada
      */
     public Nota actualizarNota(Nota nota, Long usuarioId) {
+        // Obtener la nota existente para verificar permisos
         Nota notaExistente = notaRepository.findById(nota.getId())
                 .orElseThrow(() -> new RuntimeException("Nota no encontrada"));
 
@@ -94,12 +102,19 @@ public class NotaService {
             throw new RuntimeException("No tienes permisos para editar esta nota");
         }
 
+        // Configurar la nota con el usuario y materia correspondientes
+        configurarNota(nota, usuarioId);
+
+        // Preservar campos que no deben cambiar
+        nota.setFechaCreacion(notaExistente.getFechaCreacion());
+
         return notaRepository.save(nota);
     }
 
     /**
      * Elimina una nota
-     * @param id ID de la nota a eliminar
+     * 
+     * @param id        ID de la nota a eliminar
      * @param usuarioId ID del usuario propietario
      */
     public void eliminarNota(Long id, Long usuarioId) {
@@ -116,7 +131,8 @@ public class NotaService {
 
     /**
      * Configura una nota con el usuario y materia correspondientes
-     * @param nota Nota a configurar
+     * 
+     * @param nota      Nota a configurar
      * @param usuarioId ID del usuario propietario
      */
     private void configurarNota(Nota nota, Long usuarioId) {
@@ -134,6 +150,9 @@ public class NotaService {
             }
 
             nota.setMateria(materia);
+        } else {
+            // Si no hay materia, asegurar que sea null
+            nota.setMateria(null);
         }
     }
 }

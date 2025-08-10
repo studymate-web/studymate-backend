@@ -107,14 +107,25 @@ public class NotaController {
             @Valid @RequestBody Nota nota) {
         try {
             Long usuarioId = getUsuarioIdDesdeToken(request);
+
+            // Log para debugging
+            System.out.println("=== Actualizando nota ===");
+            System.out.println("ID de nota: " + id);
+            System.out.println("Usuario ID: " + usuarioId);
+            System.out.println("Título: " + nota.getTitulo());
+            System.out.println("Contenido: " + nota.getContenido());
+            System.out.println("Materia: " + (nota.getMateria() != null ? nota.getMateria().getId() : "null"));
+
             if (nota.getId() == null)
                 nota.setId(id);
             Nota actualizada = notaService.actualizarNota(nota, usuarioId);
             return ResponseEntity.ok(actualizada);
         } catch (Exception e) {
+            e.printStackTrace(); // Log del error completo
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Error al actualizar nota: " + e.getMessage(),
-                    "status", "ERROR"));
+                    "status", "ERROR",
+                    "error", e.getClass().getSimpleName()));
         }
     }
 
