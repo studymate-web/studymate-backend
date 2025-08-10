@@ -8,6 +8,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -58,11 +59,31 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }
 
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMessageNotReadableException(
+            HttpMessageNotReadableException ex) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Error en el formato de datos enviados: " + ex.getMessage());
+        response.put("status", "BAD_REQUEST");
+        response.put("error", "INVALID_JSON_FORMAT");
+
+        // Log del error para debugging
+        System.err.println("Error de formato JSON: " + ex.getMessage());
+        ex.printStackTrace();
+
+        return ResponseEntity.badRequest().body(response);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGenericException(Exception ex) {
         Map<String, Object> response = new HashMap<>();
-        response.put("message", "Error interno del servidor");
+        response.put("message", "Error interno del servidor: " + ex.getMessage());
         response.put("status", "ERROR");
+        response.put("error", ex.getClass().getSimpleName());
+
+        // Log del error para debugging
+        System.err.println("Error genérico: " + ex.getMessage());
+        ex.printStackTrace();
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
     }

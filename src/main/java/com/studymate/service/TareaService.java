@@ -146,7 +146,25 @@ public class TareaService {
      * @return Tarea actualizada
      */
     public Tarea actualizarTarea(Tarea tarea, Long usuarioId) {
-        obtenerTareaConPermisos(tarea.getId(), usuarioId);
+        // Obtener la tarea existente para verificar permisos
+        Tarea tareaExistente = obtenerTareaConPermisos(tarea.getId(), usuarioId);
+        
+        // Configurar la tarea con el usuario y materia correspondientes
+        configurarTarea(tarea, usuarioId);
+        
+        // Validar prioridad
+        if (tarea.getPrioridad() == null) {
+            tarea.setPrioridad(Prioridad.MEDIA);
+        }
+        
+        // Validar completada
+        if (tarea.getCompletada() == null) {
+            tarea.setCompletada(false);
+        }
+        
+        // Preservar campos que no deben cambiar
+        tarea.setFechaCreacion(tareaExistente.getFechaCreacion());
+        
         return tareaRepository.save(tarea);
     }
 
@@ -182,6 +200,9 @@ public class TareaService {
             }
 
             tarea.setMateria(materia);
+        } else {
+            // Si no hay materia, asegurar que sea null
+            tarea.setMateria(null);
         }
     }
 

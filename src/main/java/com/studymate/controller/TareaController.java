@@ -119,14 +119,29 @@ public class TareaController {
             @Valid @RequestBody Tarea tarea) {
         try {
             Long usuarioId = getUsuarioIdDesdeToken(request);
+
+            // Log para debugging
+            System.out.println("=== Actualizando tarea ===");
+            System.out.println("ID de tarea: " + id);
+            System.out.println("Usuario ID: " + usuarioId);
+            System.out.println("Título: " + tarea.getTitulo());
+            System.out.println("Descripción: " + tarea.getDescripcion());
+            System.out.println("Fecha límite: " + tarea.getFechaLimite());
+            System.out.println("Tipo de fecha límite: "
+                    + (tarea.getFechaLimite() != null ? tarea.getFechaLimite().getClass().getSimpleName() : "null"));
+            System.out.println("Prioridad: " + tarea.getPrioridad());
+            System.out.println("Materia: " + (tarea.getMateria() != null ? tarea.getMateria().getId() : "null"));
+
             if (tarea.getId() == null)
                 tarea.setId(id);
             Tarea actualizada = tareaService.actualizarTarea(tarea, usuarioId);
             return ResponseEntity.ok(actualizada);
         } catch (Exception e) {
+            e.printStackTrace(); // Log del error completo
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "Error al actualizar tarea: " + e.getMessage(),
-                    "status", "ERROR"));
+                    "status", "ERROR",
+                    "error", e.getClass().getSimpleName()));
         }
     }
 
