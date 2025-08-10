@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.web.server.ResponseStatusException;
 import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
@@ -32,12 +33,12 @@ public class TareaController {
     private Long getUsuarioIdDesdeToken(HttpServletRequest request) {
         String authHeader = request.getHeader("Authorization");
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            throw new RuntimeException("Token no proporcionado");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token no proporcionado");
         }
         String token = authHeader.substring(7);
         String email = jwtService.extractUsername(token);
         Usuario usuario = usuarioService.buscarPorEmail(email)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario no encontrado"));
         return usuario.getId();
     }
 
