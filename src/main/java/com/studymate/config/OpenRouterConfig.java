@@ -25,7 +25,7 @@ public class OpenRouterConfig {
     /**
      * Modelo de IA a usar (por defecto: gpt-3.5-turbo)
      */
-    private String model = "openai/gpt-3.5-turbo";
+    private String model = "alibaba/tongyi-deepresearch-30b-a3b:free";
     
     /**
      * Temperatura para la generación (0.0 a 2.0)
